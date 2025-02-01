@@ -4,12 +4,11 @@ const { sendMessage } = require('../handles/sendMessage');
 const conversationHistory = new Map();
 const timeouts = new Map();
 
-// هنا يمكنك تحديد الشخصية التي تريدها
 const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only"
-// الدالة الأساسية للتفاعل مع المستخدم
+
 module.exports = {
   name: 'gpt4',
-  description: 'Interact with Gemini API with role-playing',
+  description: 'Interact with Gemini API with images support',
   usage: 'gpt4 [your message]',
   author: 'coffee',
 
@@ -21,39 +20,46 @@ module.exports = {
       conversationHistory.set(senderId, []);
     }
 
-    // إضافة التعليمات في بداية المحادثة إذا كانت أول رسالة
     let chatHistory = conversationHistory.get(senderId);
     if (chatHistory.length === 0) {
       chatHistory.push(`Instruction: ${persona}`);
     }
 
-    // إضافة رسالة المستخدم
     chatHistory.push(`User: ${prompt}`);
 
-    // الاحتفاظ بآخر 5 رسائل فقط
     if (chatHistory.length > 6) {
       chatHistory.shift();
     }
 
-    // تحويل المحادثة إلى نص واحد ليتم إرساله للـ API
     const fullConversation = chatHistory.join("\n");
 
     try {
       const { data } = await axios.get(`http://sgp1.hmvhostings.com:25721/gemini?question=${encodeURIComponent(fullConversation)}`);
 
       let responseText = data.answer ? data.answer : "لم أتمكن من فهم الإجابة.";
-      
-      // إضافة رد البوت إلى السجل
+
       chatHistory.push(`Bot: ${responseText}`);
 
-      // الاحتفاظ فقط بآخر 5 رسائل بعد رد البوت
       if (chatHistory.length > 6) {
         chatHistory.shift();
       }
 
-      sendMessage(senderId, { text: responseText }, pageAccessToken);
+      // إرسال النص أولًا
+      await sendMessage(senderId, { text: responseText }, pageAccessToken);
 
-      // إعادة ضبط المؤقت لحذف المحادثة بعد 10 دقائق
+      // إرسال الصور مباشرة إذا كانت متاحة
+      if (data.web_images && data.web_images.length > 0) {
+        for (let imageUrl of data.web_images) {
+          await sendMessage(senderId, {
+            attachment: {
+              type: "image",
+              payload: { url: imageUrl, is_reusable: true }
+            }
+          }, pageAccessToken);
+        }
+      }
+
+      // ضبط مؤقت حذف المحادثة بعد 10 دقائق
       if (timeouts.has(senderId)) {
         clearTimeout(timeouts.get(senderId));
       }
