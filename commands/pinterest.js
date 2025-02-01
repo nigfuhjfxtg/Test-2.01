@@ -5,8 +5,7 @@ const conversationHistory = new Map();
 const timeouts = new Map();
 
 // هنا يمكنك تحديد الشخصية التي تريدها
-const persona = "أنت الآن تتقمص شخصية شرلوك هولمز، المحقق العبقري. تكلم بأسلوب تحليلي ودقيق، واسأل أسئلة ذكية للكشف عن التفاصيل المفقودة.";
-
+const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only"
 // الدالة الأساسية للتفاعل مع المستخدم
 module.exports = {
   name: 'gpt4',
