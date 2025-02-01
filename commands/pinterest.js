@@ -4,7 +4,7 @@ const { sendMessage } = require('../handles/sendMessage');
 const conversationHistory = new Map();
 const timeouts = new Map();
 
-const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only";
+const persona = "you're rick , you're an ai assistant, you're the best and the best, use emojies in u're answers, you speak just arabic";
 
 module.exports = {
   name: 'gpt4',
