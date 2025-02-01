@@ -1,11 +1,10 @@
- 
 const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
 const conversationHistory = new Map();
 const timeouts = new Map();
 
-const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only.";
+const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only";
 
 module.exports = {
   name: 'gpt4',
