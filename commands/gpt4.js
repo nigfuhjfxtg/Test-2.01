@@ -13,8 +13,14 @@ module.exports = {
 
     try {
       const { data } = await axios.get(`http://sgp1.hmvhostings.com:25721/gemini?question=${encodeURIComponent(prompt)}`);
-      sendMessage(senderId, { text: data.response || data }, pageAccessToken);
-    } catch {
+
+      // تحويل الاستجابة إلى نص UTF-8 آمن
+      let responseText = typeof data === "string" ? data : JSON.stringify(data);
+      responseText = responseText.trim(); // إزالة أي مسافات غير ضرورية
+
+      sendMessage(senderId, { text: responseText }, pageAccessToken);
+    } catch (error) {
+      console.error("Error fetching data:", error);
       sendMessage(senderId, { text: 'There was an error generating the content. Please try again later.' }, pageAccessToken);
     }
   }
