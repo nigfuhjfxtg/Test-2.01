@@ -27,7 +27,7 @@ module.exports = {
 
     chatHistory.push(`User: ${prompt}`);
 
-    if (chatHistory.length > 6) {
+    if (chatHistory.length > 3) {
       chatHistory.shift();
     }
 
@@ -40,7 +40,7 @@ module.exports = {
 
       chatHistory.push(`Bot: ${responseText}`);
 
-      if (chatHistory.length > 6) {
+      if (chatHistory.length > 3) {
         chatHistory.shift();
       }
 
