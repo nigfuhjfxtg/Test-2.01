@@ -14,9 +14,8 @@ module.exports = {
     try {
       const { data } = await axios.get(`http://sgp1.hmvhostings.com:25721/gemini?question=${encodeURIComponent(prompt)}`);
 
-      // تحويل الاستجابة إلى نص UTF-8 آمن
-      let responseText = typeof data === "string" ? data : JSON.stringify(data);
-      responseText = responseText.trim(); // إزالة أي مسافات غير ضرورية
+      // استخراج الإجابة فقط من الكائن
+      let responseText = data.answer ? data.answer : "لم أتمكن من فهم الإجابة.";
 
       sendMessage(senderId, { text: responseText }, pageAccessToken);
     } catch (error) {
