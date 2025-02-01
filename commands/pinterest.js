@@ -1,10 +1,11 @@
+ 
 const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
 const conversationHistory = new Map();
 const timeouts = new Map();
 
-const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only"
+const persona = "You are Rick, use the emoji in the conversation, you speak Arabic only.";
 
 module.exports = {
   name: 'gpt4',
@@ -36,8 +37,7 @@ module.exports = {
     try {
       const { data } = await axios.get(`http://sgp1.hmvhostings.com:25721/gemini?question=${encodeURIComponent(fullConversation)}`);
 
-      // إزالة "Image of ..." من الإجابة
-      let responseText = data.answer ? data.answer.replace(/Image of.*?/g, '').trim() : "لم أتمكن من فهم الإجابة.";
+      let responseText = data.answer ? data.answer : "لم أتمكن من فهم الإجابة.";
 
       chatHistory.push(`Bot: ${responseText}`);
 
