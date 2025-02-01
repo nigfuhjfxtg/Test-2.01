@@ -36,7 +36,8 @@ module.exports = {
     try {
       const { data } = await axios.get(`http://sgp1.hmvhostings.com:25721/gemini?question=${encodeURIComponent(fullConversation)}`);
 
-      let responseText = data.answer ? data.answer : "لم أتمكن من فهم الإجابة.";
+      // إزالة "Image of ..." من الإجابة
+      let responseText = data.answer ? data.answer.replace(/Image of.*?/g, '').trim() : "لم أتمكن من فهم الإجابة.";
 
       chatHistory.push(`Bot: ${responseText}`);
 
