@@ -30,6 +30,6 @@ module.exports = {
       }
     }
 
-    sendMessage(senderId, { text: '' }, pageAccessToken);
+    sendMessage(senderId, { text: 'استخدام غير صالح. استخدم -بريد انشاء أو -بريد رسائل <Mail>' }, pageAccessToken);
   },
 };
