@@ -27,11 +27,8 @@ module.exports = {
       conversationHistory.get(senderId).shift(); // حذف الأقدم
     }
 
-    // تحويل المحادثة إلى نص واحد يتم إرساله للـ API
-    const fullConversation = conversationHistory.get(senderId).join("\n");
-
     try {
-      // === طلب POST إلى Blackbox API ===
+      // === إرسال الطلب إلى Blackbox API فقط ===
       const url = "https://www.blackbox.ai/api/chat";
       const data = {
         id: senderId, // استخدام معرف المستخدم لتتبع الجلسة
@@ -50,8 +47,8 @@ module.exports = {
 
       const response = await axios.post(url, data, { headers });
 
-      // استخراج الرد من البيانات
-      let responseText = response.data?.message || "لم أتمكن من فهم الإجابة.";
+      // استخراج الرد من استجابة Blackbox API
+      const responseText = response.data?.message || "لم أتمكن من فهم الإجابة.";
 
       // إضافة رد البوت إلى سجل المحادثة
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
