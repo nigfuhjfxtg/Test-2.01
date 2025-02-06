@@ -13,10 +13,10 @@ module.exports = {
   async execute(senderId, args, pageAccessToken, message) {
     const prompt = args.join(' ');
 
-    // ✅ الرد على رمز الإعجاب (👍) كنص أو زر الإعجاب الأزرق
+    // ✅ الرد على الإعجاب كنص أو كستيكر
     if (
-      prompt === '👍' ||                         // نص عادي
-      (message?.sticker_id === 369239263222822) // زر الإعجاب الأزرق في ماسنجر
+      prompt === '👍' ||                         // نص الإعجاب
+      (message?.sticker_id === 369239263222822) // ستيكر الإعجاب الأزرق في ماسنجر
     ) {
       return sendMessage(senderId, { text: '👍' }, pageAccessToken);
     }
@@ -36,17 +36,17 @@ module.exports = {
     }
 
     try {
-      // === استخدام API الجديد ===
+      // ✅ استخدام API الجديد بشكل صحيح
       const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
 
       const response = await axios.get(url);
 
-      const responseText = response.data?.answer || "لم أتمكن من فهم الإجابة.";
+      const responseText = response.data?.answer?.trim() || "لم أتمكن من فهم الإجابة.";
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
 
       sendMessage(senderId, { text: responseText }, pageAccessToken);
 
-      // إدارة مؤقت حذف المحادثة
+      // إدارة المؤقت لحذف المحادثة بعد 10 دقائق
       if (timeouts.has(senderId)) {
         clearTimeout(timeouts.get(senderId));
       }
