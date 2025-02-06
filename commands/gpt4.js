@@ -1,8 +1,8 @@
 const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
-const conversationHistory = new Map(); // تخزين المحادثات لكل مستخدم
-const timeouts = new Map(); // تخزين المؤقتات لكل مستخدم
+const conversationHistory = new Map();
+const timeouts = new Map();
 
 module.exports = {
   name: 'gpt4',
@@ -10,9 +10,20 @@ module.exports = {
   usage: 'gpt4 [your message]',
   author: 'coffee',
 
-  async execute(senderId, args, pageAccessToken) {
+  async execute(senderId, args, pageAccessToken, message) {
     const prompt = args.join(' ');
-    if (!prompt) return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
+
+    // ✅ التحقق إذا كانت الرسالة عبارة عن "👍" كنص أو زر الإعجاب الأزرق
+    if (
+      prompt === '👍' ||                         // نص عادي
+      (message.sticker_id === 369239263222822)  // زر الإعجاب الأزرق في فيسبوك (Sticker ID)
+    ) {
+      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
+    }
+
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
+    }
 
     // استرجاع المحادثة السابقة أو إنشاء محادثة جديدة
     if (!conversationHistory.has(senderId)) {
@@ -22,19 +33,17 @@ module.exports = {
     // إضافة رسالة المستخدم إلى السجل
     conversationHistory.get(senderId).push(`User: ${prompt}`);
 
-    // تحديد الحد الأقصى لعدد الرسائل للحفاظ على الأداء
     if (conversationHistory.get(senderId).length > 20) {
-      conversationHistory.get(senderId).shift(); // حذف الأقدم
+      conversationHistory.get(senderId).shift();
     }
 
     try {
-      // === إرسال الطلب إلى Blackbox API فقط ===
       const url = "https://www.blackbox.ai/api/chat";
       const data = {
-        id: senderId, // استخدام معرف المستخدم لتتبع الجلسة
+        id: senderId,
         messages: [{ id: senderId, content: prompt, role: "user" }],
         agentMode: {},
-        validated: "00f37b34-a166-4efb-bce5-1312d87f2f94", // تحقق ثابت (تأكد أنه صالح)
+        validated: "00f37b34-a166-4efb-bce5-1312d87f2f94",
       };
 
       const headers = {
@@ -47,21 +56,15 @@ module.exports = {
 
       const response = await axios.post(url, data, { headers });
 
-      // استخراج الرد من استجابة Blackbox API
       const responseText = response.data?.message || "لم أتمكن من فهم الإجابة.";
-
-      // إضافة رد البوت إلى سجل المحادثة
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
 
-      // إرسال الرد للمستخدم
       sendMessage(senderId, { text: responseText }, pageAccessToken);
 
-      // **إعادة ضبط المؤقت لكل رسالة جديدة**
       if (timeouts.has(senderId)) {
-        clearTimeout(timeouts.get(senderId)); // إلغاء المهلة السابقة
+        clearTimeout(timeouts.get(senderId));
       }
 
-      // ضبط مهلة حذف المحادثة بعد 10 دقائق من آخر رسالة
       const timeout = setTimeout(() => {
         conversationHistory.delete(senderId);
         timeouts.delete(senderId);
