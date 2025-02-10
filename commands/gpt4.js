@@ -7,8 +7,8 @@ const app = express();
 app.use(bodyParser.json());
 
 const botly = new Botly({
-    accessToken: 'PAGE_ACCESS_TOKEN',
-    verifyToken: 'VERIFY_TOKEN'
+    accessToken: 'PAGE_ACCESS_TOKEN',  // استبدل بـ TOKEN الخاص بك
+    verifyToken: 'VERIFY_TOKEN'  // استبدل بـ VERIFY TOKEN الخاص بك
 });
 
 app.post('/webhook', (req, res) => {
@@ -36,13 +36,13 @@ function handleMessage(senderId, message) {
 
     // التحقق من وجود ملصق
     if (attachments && attachments[0].payload.sticker_id) {
-        botly.sendText({ id: senderId, text: "👍" });
+        botly.sendText(senderId, "👍");
         return;
     }
 
     // استقبال الصور
     if (attachments && attachments[0].type === 'image') {
-        botly.sendText({ id: senderId, text: "شكراً لإرسال الصورة!" });
+        botly.sendText(senderId, "شكراً لإرسال الصورة!");
         return;
     }
 
@@ -57,10 +57,10 @@ function handleMessage(senderId, message) {
         uid: senderId,
         message: userMessage
     }).then(response => {
-        botly.sendText({ id: senderId, text: response.data.response });
+        botly.sendText(senderId, response.data.response);
     }).catch(error => {
         console.error('API Error:', error);
-        botly.sendText({ id: senderId, text: 'حدث خطأ أثناء المعالجة.' });
+        botly.sendText(senderId, 'حدث خطأ أثناء المعالجة.');
     });
 }
 
@@ -72,15 +72,15 @@ function generateImage(senderId, prompt) {
         const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
         
         // إرسال الصورة مباشرة
-        botly.sendImage({ id: senderId, url: imageUrl });
+        botly.sendImage(senderId, imageUrl);
     }).catch(error => {
         console.error('Image Generation Error:', error);
-        botly.sendText({ id: senderId, text: 'تعذر إنشاء الصورة.' });
+        botly.sendText(senderId, 'تعذر إنشاء الصورة.');
     });
 }
 
 function handlePostback(senderId, postback) {
-    botly.sendText({ id: senderId, text: 'تم استقبال طلبك!' });
+    botly.sendText(senderId, 'تم استقبال طلبك!');
 }
 
 app.listen(3000, () => console.log('Bot is running on port 3000'));
