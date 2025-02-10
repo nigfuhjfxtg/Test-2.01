@@ -70,6 +70,8 @@ function generateImage(senderId, prompt) {
         message: prompt
     }).then(response => {
         const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
+        
+        // إرسال الصورة مباشرة
         botly.sendImage({ id: senderId, url: imageUrl });
     }).catch(error => {
         console.error('Image Generation Error:', error);
