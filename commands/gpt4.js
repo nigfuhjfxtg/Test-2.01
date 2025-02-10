@@ -60,7 +60,8 @@ module.exports = {
       const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
       const response = await axios.get(url);
 
-      const responseText = response.data?.answer?.trim() || "لم أتمكن من فهم الإجابة.";
+      // ✅ استخدام الحقل الصحيح من استجابة الـ API
+      const responseText = response.data?.response?.trim() || "لم أتمكن من فهم الإجابة.";
       const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
 
       if (imageUrl) {
@@ -81,7 +82,7 @@ module.exports = {
 
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
 
-      // إدارة المؤقت لحذف المحادثة بعد 10 دقائق
+      // ✅ إدارة المؤقت لحذف المحادثة بعد 10 دقائق
       if (timeouts.has(senderId)) {
         clearTimeout(timeouts.get(senderId));
       }
@@ -89,7 +90,7 @@ module.exports = {
       const timeout = setTimeout(() => {
         conversationHistory.delete(senderId);
         timeouts.delete(senderId);
-      }, 10 * 60 * 1000);
+      }, 10 * 60 * 1000); // حذف المحادثة بعد 10 دقائق
 
       timeouts.set(senderId, timeout);
 
