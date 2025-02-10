@@ -1,116 +1,96 @@
-const express = require('express');
-const bodyParser = require('body-parser');
 const axios = require('axios');
+const { sendMessage } = require('../handles/sendMessage');
 
-const app = express();
-app.use(bodyParser.json());
+const conversationHistory = new Map();
+const timeouts = new Map();
 
-const PAGE_ACCESS_TOKEN = 'PAGE_ACCESS_TOKEN'; // استبدل بالتوكن الصحيح
+module.exports = {
+  name: 'gpt4',
+  description: 'Interact with Kaiz API with short-term memory',
+  usage: 'gpt4 [your message]',
+  author: 'coffee',
 
-// إرسال طلب إلى Facebook Send API
-function callSendAPI(senderId, messageData) {
-    return axios.post(`https://graph.facebook.com/v12.0/me/messages`, {
-        recipient: { id: senderId },
-        message: messageData
-    }, {
-        params: { access_token: PAGE_ACCESS_TOKEN }
-    });
-}
+  async execute(senderId, args, pageAccessToken, message) {
+    const prompt = args.join(' ');
 
-// استقبال الطلبات من Webhook
-app.post('/webhook', (req, res) => {
-    const data = req.body;
-
-    if (data.object === 'page') {
-        data.entry.forEach(entry => {
-            entry.messaging.forEach(event => {
-                const senderId = event.sender.id;
-
-                if (event.message) {
-                    handleMessage(senderId, event.message);
-                } else if (event.postback) {
-                    handlePostback(senderId, event.postback);
-                }
-            });
-        });
-    }
-    res.sendStatus(200);
-});
-
-// التعامل مع الرسائل
-function handleMessage(senderId, message) {
-    const userMessage = message.text;
-    const attachments = message.attachments;
-
-    // التحقق من وجود ملصق
-    if (attachments && attachments[0].payload && attachments[0].payload.sticker_id) {
-        callSendAPI(senderId, { text: "👍" });
-        return;
+    // ✅ الرد على أي ملصق برمز 👍
+    if (message?.sticker_id) {
+      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
     }
 
-    // استقبال الصور وإرسالها إلى الـ API
-    if (attachments && attachments[0].type === 'image') {
-        const imageUrl = attachments[0].payload.url;
+    // ✅ استقبال الصور وإرسالها إلى الـ API
+    if (message?.attachments && message.attachments[0].type === 'image') {
+      const imageUrl = message.attachments[0].payload.url;
 
-        axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-            uid: senderId,
-            image: imageUrl // إرسال رابط الصورة إلى الـ API
-        }).then(response => {
-            callSendAPI(senderId, { text: response.data.response }); // إرسال رد الـ API
-        }).catch(error => {
-            console.error('API Error:', error);
-            callSendAPI(senderId, { text: 'حدث خطأ أثناء معالجة الصورة.' });
+      try {
+        const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+          uid: senderId,
+          image: imageUrl // إرسال رابط الصورة إلى الـ API
         });
 
-        return;
+        const apiResponse = response.data?.response || "لم أتمكن من معالجة الصورة.";
+        return sendMessage(senderId, { text: apiResponse }, pageAccessToken);
+
+      } catch (error) {
+        console.error("Error processing image:", error);
+        return sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الصورة.' }, pageAccessToken);
+      }
     }
 
-    // التحقق من طلب إنشاء صورة
-    if (userMessage && userMessage.includes('انشئ صورة')) {
-        generateImage(senderId, userMessage);
-        return;
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
     }
 
-    // إرسال الرسالة إلى API مع uid لحفظ المحادثة
-    axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-        uid: senderId,
-        message: userMessage
-    }).then(response => {
-        callSendAPI(senderId, { text: response.data.response });
-    }).catch(error => {
-        console.error('API Error:', error);
-        callSendAPI(senderId, { text: 'حدث خطأ أثناء المعالجة.' });
-    });
-}
+    // ✅ إدارة سجل المحادثة
+    if (!conversationHistory.has(senderId)) {
+      conversationHistory.set(senderId, []);
+    }
+    conversationHistory.get(senderId).push(`User: ${prompt}`);
 
-// إنشاء صورة وإرسالها
-function generateImage(senderId, prompt) {
-    axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-        uid: senderId,
-        message: prompt
-    }).then(response => {
-        const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
-        
-        // إرسال الصورة مباشرة باستخدام Send API
-        callSendAPI(senderId, {
-            attachment: {
-                type: "image",
-                payload: {
-                    url: imageUrl,
-                    is_reusable: true
-                }
+    if (conversationHistory.get(senderId).length > 20) {
+      conversationHistory.get(senderId).shift();
+    }
+
+    try {
+      const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
+      const response = await axios.get(url);
+
+      const responseText = response.data?.answer?.trim() || "لم أتمكن من فهم الإجابة.";
+      const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
+
+      if (imageUrl) {
+        // ✅ إذا كان الرد يحتوي على رابط صورة، أرسلها مباشرة كمرفق صورة
+        await sendMessage(senderId, {
+          attachment: {
+            type: "image",
+            payload: {
+              url: imageUrl,
+              is_reusable: true
             }
-        });
-    }).catch(error => {
-        console.error('Image Generation Error:', error);
-        callSendAPI(senderId, { text: 'تعذر إنشاء الصورة.' });
-    });
-}
+          }
+        }, pageAccessToken);
+      } else {
+        // ✅ إذا لم يكن هناك صورة، أرسل الرد كنص عادي
+        await sendMessage(senderId, { text: responseText }, pageAccessToken);
+      }
 
-// التعامل مع postbacks
-function handlePostback(senderId, postback) {
-    callSendAPI(senderId, { text: 'تم استقبال طلبك!' });
-}
+      conversationHistory.get(senderId).push(`Bot: ${responseText}`);
 
-// بدء تشغيل الخادم
-app.listen(3000, () => console.log('Bot is running on port 3000'));
+      // إدارة المؤقت لحذف المحادثة بعد 10 دقائق
+      if (timeouts.has(senderId)) {
+        clearTimeout(timeouts.get(senderId));
+      }
+
+      const timeout = setTimeout(() => {
+        conversationHistory.delete(senderId);
+        timeouts.delete(senderId);
+      }, 10 * 60 * 1000);
+
+      timeouts.set(senderId, timeout);
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الطلب. حاول مرة أخرى لاحقًا.' }, pageAccessToken);
+    }
+  }
+};
