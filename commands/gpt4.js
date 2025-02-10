@@ -14,8 +14,13 @@ module.exports = {
     const prompt = args.join(' ');
 
     // ✅ الرد على أي ملصق برمز 👍
-    if (message?.sticker_id) {
-      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
+    if (message && message.sticker_id) {
+      try {
+        await sendMessage(senderId, { text: '👍' }, pageAccessToken);
+      } catch (error) {
+        console.error("Error sending sticker response:", error);
+      }
+      return;
     }
 
     // ✅ استقبال الصور وإرسالها إلى الـ API
