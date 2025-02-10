@@ -1,8 +1,8 @@
 const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
-const conversationHistory = new Map();
-const timeouts = new Map();
+const conversationHistory = new Map(); // حفظ سجل المحادثات
+const timeouts = new Map(); // إدارة مؤقت حذف السجل
 
 module.exports = {
   name: 'gpt4',
@@ -23,13 +23,25 @@ module.exports = {
       return;
     }
 
-    // ✅ استقبال الصور وإرسالها إلى الـ API
+    // ✅ إدارة سجل المحادثة (إنشاء سجل جديد إذا لم يكن موجود)
+    if (!conversationHistory.has(senderId)) {
+      conversationHistory.set(senderId, []);
+    }
+
+    const userHistory = conversationHistory.get(senderId);
+
+    // ✅ استقبال الصور ومعالجتها مع السجل السابق
     if (message?.attachments && message.attachments[0].type === 'image') {
       const imageUrl = message.attachments[0].payload.url;
+
+      // إضافة الصورة لسجل المحادثة
+      userHistory.push({ type: 'image', content: imageUrl });
+      if (userHistory.length > 3) userHistory.shift(); // الاحتفاظ بآخر 3 رسائل فقط
 
       try {
         const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
           uid: senderId,
+          history: userHistory, // إرسال سجل المحادثة
           image: imageUrl
         });
 
@@ -42,74 +54,52 @@ module.exports = {
       }
     }
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
-    }
+    // ✅ معالجة الرسائل النصية
+    if (prompt) {
+      // إضافة النص لسجل المحادثة
+      userHistory.push({ type: 'text', content: prompt });
+      if (userHistory.length > 3) userHistory.shift(); // الاحتفاظ بآخر 3 رسائل فقط
 
-    // ✅ إدارة سجل المحادثة (آخر 3 رسائل فقط)
-    if (!conversationHistory.has(senderId)) {
-      conversationHistory.set(senderId, []);
-    }
+      try {
+        const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+          uid: senderId,
+          ask: prompt,
+          history: userHistory // إرسال سجل المحادثة
+        });
 
-    // إضافة رسالة المستخدم إلى سجل المحادثة
-    conversationHistory.get(senderId).push(`User: ${prompt}`);
+        const responseText = response.data?.response?.trim() || "لم أتمكن من فهم الإجابة.";
+        const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
 
-    // الاحتفاظ بآخر 3 رسائل فقط
-    if (conversationHistory.get(senderId).length > 3) {
-      conversationHistory.get(senderId).shift();
-    }
-
-    // ✅ دمج سجل المحادثة مع الرسالة الجديدة لإرسالها إلى الـ API
-    const history = conversationHistory.get(senderId).join('\n');
-
-    try {
-      const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-        uid: senderId,
-        ask: `${history}\nUser: ${prompt}` // إرسال سجل المحادثة مع السؤال
-      });
-
-      const responseText = response.data?.response?.trim() || "لم أتمكن من فهم الإجابة.";
-      const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
-
-      if (imageUrl) {
-        // ✅ إذا كان الرد يحتوي على رابط صورة، أرسلها مباشرة كمرفق صورة
-        await sendMessage(senderId, {
-          attachment: {
-            type: "image",
-            payload: {
-              url: imageUrl,
-              is_reusable: true
+        if (imageUrl) {
+          await sendMessage(senderId, {
+            attachment: {
+              type: "image",
+              payload: {
+                url: imageUrl,
+                is_reusable: true
+              }
             }
-          }
-        }, pageAccessToken);
-      } else {
-        // ✅ إذا لم يكن هناك صورة، أرسل الرد كنص عادي
-        await sendMessage(senderId, { text: responseText }, pageAccessToken);
+          }, pageAccessToken);
+        } else {
+          await sendMessage(senderId, { text: responseText }, pageAccessToken);
+        }
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        return sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الطلب. حاول مرة أخرى لاحقًا.' }, pageAccessToken);
       }
-
-      // إضافة رد البوت إلى سجل المحادثة
-      conversationHistory.get(senderId).push(`Bot: ${responseText}`);
-
-      // الاحتفاظ بآخر 3 رسائل فقط
-      if (conversationHistory.get(senderId).length > 3) {
-        conversationHistory.get(senderId).shift();
-      }
-
-      // ✅ إدارة المؤقت لحذف المحادثة بعد 10 دقائق
-      if (timeouts.has(senderId)) {
-        clearTimeout(timeouts.get(senderId));
-      }
-
-      const timeout = setTimeout(() => {
-        conversationHistory.delete(senderId);
-        timeouts.delete(senderId);
-      }, 10 * 60 * 1000); // حذف المحادثة بعد 10 دقائق
-
-      timeouts.set(senderId, timeout);
-
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الطلب. حاول مرة أخرى لاحقًا.' }, pageAccessToken);
     }
+
+    // ✅ إدارة مؤقت حذف سجل المحادثة بعد 10 دقائق
+    if (timeouts.has(senderId)) {
+      clearTimeout(timeouts.get(senderId));
+    }
+
+    const timeout = setTimeout(() => {
+      conversationHistory.delete(senderId);
+      timeouts.delete(senderId);
+    }, 10 * 60 * 1000);
+
+    timeouts.set(senderId, timeout);
   }
 };
