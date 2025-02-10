@@ -46,13 +46,17 @@ module.exports = {
       return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
     }
 
-    // ✅ إدارة سجل المحادثة
+    // ✅ إدارة سجل المحادثة (آخر 3 رسائل فقط)
     if (!conversationHistory.has(senderId)) {
       conversationHistory.set(senderId, []);
     }
-    conversationHistory.get(senderId).push(`User: ${prompt}`);
 
-    if (conversationHistory.get(senderId).length > 20) {
+    // إضافة رسالة المستخدم
+    const userMessage = `User: ${prompt}`;
+    conversationHistory.get(senderId).push(userMessage);
+
+    // الاحتفاظ بآخر 3 رسائل فقط
+    if (conversationHistory.get(senderId).length > 3) {
       conversationHistory.get(senderId).shift();
     }
 
@@ -60,7 +64,6 @@ module.exports = {
       const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
       const response = await axios.get(url);
 
-      // ✅ استخدام الحقل الصحيح من استجابة الـ API
       const responseText = response.data?.response?.trim() || "لم أتمكن من فهم الإجابة.";
       const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
 
@@ -80,7 +83,13 @@ module.exports = {
         await sendMessage(senderId, { text: responseText }, pageAccessToken);
       }
 
+      // إضافة رد البوت إلى سجل المحادثة
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
+
+      // الاحتفاظ بآخر 3 رسائل فقط
+      if (conversationHistory.get(senderId).length > 3) {
+        conversationHistory.get(senderId).shift();
+      }
 
       // ✅ إدارة المؤقت لحذف المحادثة بعد 10 دقائق
       if (timeouts.has(senderId)) {
