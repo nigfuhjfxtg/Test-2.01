@@ -1,75 +1,84 @@
+const express = require('express');
+const bodyParser = require('body-parser');
 const axios = require('axios');
-const { sendMessage } = require('../handles/sendMessage');
+const { Botly } = require('botly');
 
-const conversationHistory = new Map(); // تخزين المحادثات لكل مستخدم
-const timeouts = new Map(); // تخزين المؤقتات لكل مستخدم
+const app = express();
+app.use(bodyParser.json());
 
-module.exports = {
-  name: 'gpt4',
-  description: 'Interact with Chipp AI API with short-term memory',
-  usage: 'gpt4 [your message]',
-  author: 'coffee',
+const botly = new Botly({
+    accessToken: 'PAGE_ACCESS_TOKEN',
+    verifyToken: 'VERIFY_TOKEN'
+});
 
-  async execute(senderId, args, pageAccessToken, message) {
-    try {
-      // التحقق من وجود message و attachments لتجنب الأخطاء
-      if (message && message.message && message.message.attachments &&
-          message.message.attachments[0] &&
-          message.message.attachments[0].payload &&
-          message.message.attachments[0].payload.sticker_id) {
-        return sendMessage(senderId, { text: "👍" }, pageAccessToken);
-      }
+app.post('/webhook', (req, res) => {
+    const data = req.body;
 
-      const prompt = args.join(' ');
-      if (!prompt) {
-        return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
-      }
+    if (data.object === 'page') {
+        data.entry.forEach(entry => {
+            entry.messaging.forEach(event => {
+                const senderId = event.sender.id;
 
-      // استرجاع المحادثة السابقة أو إنشاء محادثة جديدة
-      if (!conversationHistory.has(senderId)) {
-        conversationHistory.set(senderId, []);
-      }
-
-      // إضافة رسالة المستخدم إلى السجل
-      conversationHistory.get(senderId).push(`User: ${prompt}`);
-
-      // تحديد الحد الأقصى لعدد الرسائل للحفاظ على الأداء
-      if (conversationHistory.get(senderId).length > 20) {
-        conversationHistory.get(senderId).shift(); // حذف الأقدم
-      }
-
-      const { data } = await axios.get(`https://kaiz-apis.gleeze.com/api/chipp-ai`, {
-        params: {
-          ask: prompt,
-          uid: senderId
-        }
-      });
-
-      // استخراج الإجابة من JSON
-      let responseText = data.response ? data.response : "لم أتمكن من فهم الإجابة.";
-
-      // إضافة رد البوت إلى سجل المحادثة
-      conversationHistory.get(senderId).push(`Bot: ${responseText}`);
-
-      // إرسال الرد للمستخدم
-      sendMessage(senderId, { text: responseText }, pageAccessToken);
-
-      // إعادة ضبط المؤقت لكل رسالة جديدة
-      if (timeouts.has(senderId)) {
-        clearTimeout(timeouts.get(senderId)); // إلغاء المهلة السابقة
-      }
-
-      // ضبط مهلة حذف المحادثة بعد 10 دقائق من آخر رسالة
-      const timeout = setTimeout(() => {
-        conversationHistory.delete(senderId);
-        timeouts.delete(senderId);
-      }, 10 * 60 * 1000);
-
-      timeouts.set(senderId, timeout);
-
-    } catch (error) {
-      console.error("Error:", error);
-      sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الطلب. حاول مرة أخرى لاحقًا.' }, pageAccessToken);
+                if (event.message) {
+                    handleMessage(senderId, event.message);
+                } else if (event.postback) {
+                    handlePostback(senderId, event.postback);
+                }
+            });
+        });
     }
-  }
-};
+    res.sendStatus(200);
+});
+
+function handleMessage(senderId, message) {
+    const userMessage = message.text;
+    const attachments = message.attachments;
+
+    // التحقق من وجود ملصق
+    if (attachments && attachments[0].payload.sticker_id) {
+        botly.sendText({ id: senderId, text: "👍" });
+        return;
+    }
+
+    // استقبال الصور
+    if (attachments && attachments[0].type === 'image') {
+        botly.sendText({ id: senderId, text: "شكراً لإرسال الصورة!" });
+        return;
+    }
+
+    // التحقق من طلب إنشاء صورة
+    if (userMessage && userMessage.includes('انشئ صورة')) {
+        generateImage(senderId, userMessage);
+        return;
+    }
+
+    // إرسال الرسالة إلى API مع uid لحفظ المحادثة
+    axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+        uid: senderId,
+        message: userMessage
+    }).then(response => {
+        botly.sendText({ id: senderId, text: response.data.response });
+    }).catch(error => {
+        console.error('API Error:', error);
+        botly.sendText({ id: senderId, text: 'حدث خطأ أثناء المعالجة.' });
+    });
+}
+
+function generateImage(senderId, prompt) {
+    axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+        uid: senderId,
+        message: prompt
+    }).then(response => {
+        const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
+        botly.sendImage({ id: senderId, url: imageUrl });
+    }).catch(error => {
+        console.error('Image Generation Error:', error);
+        botly.sendText({ id: senderId, text: 'تعذر إنشاء الصورة.' });
+    });
+}
+
+function handlePostback(senderId, postback) {
+    botly.sendText({ id: senderId, text: 'تم استقبال طلبك!' });
+}
+
+app.listen(3000, () => console.log('Bot is running on port 3000'));
