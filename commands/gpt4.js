@@ -1,14 +1,14 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const { Botly } = require('botly');
+const botly = require('botly');  // استيراد المكتبة بدون { }
 
 const app = express();
 app.use(bodyParser.json());
 
-const botly = new Botly({
-    accessToken: 'PAGE_ACCESS_TOKEN',  // استبدل بـ TOKEN الخاص بك
-    verifyToken: 'VERIFY_TOKEN'  // استبدل بـ VERIFY TOKEN الخاص بك
+const bot = botly({
+    accessToken: 'PAGE_ACCESS_TOKEN',  // استبدال بـ TOKEN الصحيح
+    verifyToken: 'VERIFY_TOKEN'  // استبدال بـ VERIFY TOKEN الصحيح
 });
 
 app.post('/webhook', (req, res) => {
@@ -36,13 +36,13 @@ function handleMessage(senderId, message) {
 
     // التحقق من وجود ملصق
     if (attachments && attachments[0].payload.sticker_id) {
-        botly.sendText(senderId, "👍");
+        bot.sendText(senderId, "👍");
         return;
     }
 
     // استقبال الصور
     if (attachments && attachments[0].type === 'image') {
-        botly.sendText(senderId, "شكراً لإرسال الصورة!");
+        bot.sendText(senderId, "شكراً لإرسال الصورة!");
         return;
     }
 
@@ -57,10 +57,10 @@ function handleMessage(senderId, message) {
         uid: senderId,
         message: userMessage
     }).then(response => {
-        botly.sendText(senderId, response.data.response);
+        bot.sendText(senderId, response.data.response);
     }).catch(error => {
         console.error('API Error:', error);
-        botly.sendText(senderId, 'حدث خطأ أثناء المعالجة.');
+        bot.sendText(senderId, 'حدث خطأ أثناء المعالجة.');
     });
 }
 
@@ -72,15 +72,15 @@ function generateImage(senderId, prompt) {
         const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
         
         // إرسال الصورة مباشرة
-        botly.sendImage(senderId, imageUrl);
+        bot.sendImage(senderId, imageUrl);
     }).catch(error => {
         console.error('Image Generation Error:', error);
-        botly.sendText(senderId, 'تعذر إنشاء الصورة.');
+        bot.sendText(senderId, 'تعذر إنشاء الصورة.');
     });
 }
 
 function handlePostback(senderId, postback) {
-    botly.sendText(senderId, 'تم استقبال طلبك!');
+    bot.sendText(senderId, 'تم استقبال طلبك!');
 }
 
 app.listen(3000, () => console.log('Bot is running on port 3000'));
