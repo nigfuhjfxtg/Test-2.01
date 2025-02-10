@@ -48,9 +48,20 @@ function handleMessage(senderId, message) {
         return;
     }
 
-    // استقبال الصور
+    // استقبال الصور وإرسالها إلى الـ API
     if (attachments && attachments[0].type === 'image') {
-        callSendAPI(senderId, { text: "شكراً لإرسال الصورة!" });
+        const imageUrl = attachments[0].payload.url;
+
+        axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+            uid: senderId,
+            image: imageUrl // إرسال رابط الصورة إلى الـ API
+        }).then(response => {
+            callSendAPI(senderId, { text: response.data.response }); // إرسال رد الـ API
+        }).catch(error => {
+            console.error('API Error:', error);
+            callSendAPI(senderId, { text: 'حدث خطأ أثناء معالجة الصورة.' });
+        });
+
         return;
     }
 
