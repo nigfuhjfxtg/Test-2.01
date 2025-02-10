@@ -1,56 +1,61 @@
 const axios = require('axios');
 const { sendMessage } = require('../handles/sendMessage');
 
-const conversationHistory = new Map();
-const timeouts = new Map();
+const conversationHistory = new Map(); // تخزين المحادثات لكل مستخدم
+const timeouts = new Map(); // تخزين المؤقتات لكل مستخدم
 
 module.exports = {
   name: 'gpt4',
-  description: 'Interact with Kaiz API with short-term memory',
+  description: 'Interact with Chipp AI API with short-term memory',
   usage: 'gpt4 [your message]',
   author: 'coffee',
 
   async execute(senderId, args, pageAccessToken, message) {
+    // الرد برمز 👍 إذا تم استلامه
+    if (message.message && message.message.attachments &&
+        message.message.attachments[0].payload.sticker_id) {
+      return sendMessage(senderId, { text: "👍" }, pageAccessToken);
+    }
+
     const prompt = args.join(' ');
+    if (!prompt) return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
 
-    // ✅ الرد على الإعجاب كنص أو كستيكر
-    if (
-      prompt === '👍' ||                         // نص الإعجاب
-      (message?.sticker_id === 369239263222822) // ستيكر الإعجاب الأزرق في ماسنجر
-    ) {
-      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
-    }
-
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
-    }
-
-    // إدارة سجل المحادثة
+    // استرجاع المحادثة السابقة أو إنشاء محادثة جديدة
     if (!conversationHistory.has(senderId)) {
       conversationHistory.set(senderId, []);
     }
+
+    // إضافة رسالة المستخدم إلى السجل
     conversationHistory.get(senderId).push(`User: ${prompt}`);
 
+    // تحديد الحد الأقصى لعدد الرسائل للحفاظ على الأداء
     if (conversationHistory.get(senderId).length > 20) {
-      conversationHistory.get(senderId).shift();
+      conversationHistory.get(senderId).shift(); // حذف الأقدم
     }
 
     try {
-      // ✅ استخدام API الجديد بشكل صحيح
-      const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
+      const { data } = await axios.get(`https://kaiz-apis.gleeze.com/api/chipp-ai`, {
+        params: {
+          ask: prompt,
+          uid: senderId
+        }
+      });
 
-      const response = await axios.get(url);
+      // استخراج الإجابة من JSON
+      let responseText = data.response ? data.response : "لم أتمكن من فهم الإجابة.";
 
-      const responseText = response.data?.answer?.trim() || "لم أتمكن من فهم الإجابة.";
+      // إضافة رد البوت إلى سجل المحادثة
       conversationHistory.get(senderId).push(`Bot: ${responseText}`);
 
+      // إرسال الرد للمستخدم
       sendMessage(senderId, { text: responseText }, pageAccessToken);
 
-      // إدارة المؤقت لحذف المحادثة بعد 10 دقائق
+      // إعادة ضبط المؤقت لكل رسالة جديدة
       if (timeouts.has(senderId)) {
-        clearTimeout(timeouts.get(senderId));
+        clearTimeout(timeouts.get(senderId)); // إلغاء المهلة السابقة
       }
 
+      // ضبط مهلة حذف المحادثة بعد 10 دقائق من آخر رسالة
       const timeout = setTimeout(() => {
         conversationHistory.delete(senderId);
         timeouts.delete(senderId);
