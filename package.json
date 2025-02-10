@@ -17,7 +17,7 @@
     "node-fetch": "^3.3.2",
     "request": "^2.88.2",
     "winston": "^3.13.0",
-    "botly": "^2.0.0"
+    "botly": "^1.0.0"
   },
   "engines": {
     "node": "20.x"
