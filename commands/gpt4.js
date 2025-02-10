@@ -29,7 +29,7 @@ module.exports = {
 
       try {
         const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-          uid: senderId, // إرسال الـ uid مع الصورة
+          uid: senderId,
           image: imageUrl
         });
 
@@ -51,18 +51,22 @@ module.exports = {
       conversationHistory.set(senderId, []);
     }
 
-    // إضافة رسالة المستخدم
-    const userMessage = `User: ${prompt}`;
-    conversationHistory.get(senderId).push(userMessage);
+    // إضافة رسالة المستخدم إلى سجل المحادثة
+    conversationHistory.get(senderId).push(`User: ${prompt}`);
 
     // الاحتفاظ بآخر 3 رسائل فقط
     if (conversationHistory.get(senderId).length > 3) {
       conversationHistory.get(senderId).shift();
     }
 
+    // ✅ دمج سجل المحادثة مع الرسالة الجديدة لإرسالها إلى الـ API
+    const history = conversationHistory.get(senderId).join('\n');
+
     try {
-      const url = `https://kaiz-apis.gleeze.com/api/chipp-ai?ask=${encodeURIComponent(prompt)}&uid=${senderId}`;
-      const response = await axios.get(url);
+      const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
+        uid: senderId,
+        ask: `${history}\nUser: ${prompt}` // إرسال سجل المحادثة مع السؤال
+      });
 
       const responseText = response.data?.response?.trim() || "لم أتمكن من فهم الإجابة.";
       const imageUrl = responseText.match(/https?:\/\/\S+/)?.[0]; // التحقق من وجود رابط صورة
