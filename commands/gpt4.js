@@ -11,29 +11,33 @@ module.exports = {
   author: 'coffee',
 
   async execute(senderId, args, pageAccessToken, message) {
-    // الرد برمز 👍 إذا تم استلامه
-    if (message.message && message.message.attachments &&
-        message.message.attachments[0].payload.sticker_id) {
-      return sendMessage(senderId, { text: "👍" }, pageAccessToken);
-    }
-
-    const prompt = args.join(' ');
-    if (!prompt) return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
-
-    // استرجاع المحادثة السابقة أو إنشاء محادثة جديدة
-    if (!conversationHistory.has(senderId)) {
-      conversationHistory.set(senderId, []);
-    }
-
-    // إضافة رسالة المستخدم إلى السجل
-    conversationHistory.get(senderId).push(`User: ${prompt}`);
-
-    // تحديد الحد الأقصى لعدد الرسائل للحفاظ على الأداء
-    if (conversationHistory.get(senderId).length > 20) {
-      conversationHistory.get(senderId).shift(); // حذف الأقدم
-    }
-
     try {
+      // التحقق من وجود message و attachments لتجنب الأخطاء
+      if (message && message.message && message.message.attachments &&
+          message.message.attachments[0] &&
+          message.message.attachments[0].payload &&
+          message.message.attachments[0].payload.sticker_id) {
+        return sendMessage(senderId, { text: "👍" }, pageAccessToken);
+      }
+
+      const prompt = args.join(' ');
+      if (!prompt) {
+        return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
+      }
+
+      // استرجاع المحادثة السابقة أو إنشاء محادثة جديدة
+      if (!conversationHistory.has(senderId)) {
+        conversationHistory.set(senderId, []);
+      }
+
+      // إضافة رسالة المستخدم إلى السجل
+      conversationHistory.get(senderId).push(`User: ${prompt}`);
+
+      // تحديد الحد الأقصى لعدد الرسائل للحفاظ على الأداء
+      if (conversationHistory.get(senderId).length > 20) {
+        conversationHistory.get(senderId).shift(); // حذف الأقدم
+      }
+
       const { data } = await axios.get(`https://kaiz-apis.gleeze.com/api/chipp-ai`, {
         params: {
           ask: prompt,
@@ -64,7 +68,7 @@ module.exports = {
       timeouts.set(senderId, timeout);
 
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error:", error);
       sendMessage(senderId, { text: 'حدث خطأ أثناء معالجة الطلب. حاول مرة أخرى لاحقًا.' }, pageAccessToken);
     }
   }
