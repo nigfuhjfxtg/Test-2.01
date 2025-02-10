@@ -29,8 +29,8 @@ module.exports = {
 
       try {
         const response = await axios.post('https://kaiz-apis.gleeze.com/api/chipp-ai', {
-          uid: senderId,
-          image: imageUrl // إرسال رابط الصورة إلى الـ API
+          uid: senderId, // إرسال الـ uid مع الصورة
+          image: imageUrl
         });
 
         const apiResponse = response.data?.response || "لم أتمكن من معالجة الصورة.";
