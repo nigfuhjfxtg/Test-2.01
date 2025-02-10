@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const botly = require('botly');  // استيراد المكتبة بدون { }
+const botly = require('botly'); // استيراد مكتبة botly
 
 const app = express();
 app.use(bodyParser.json());
@@ -71,7 +71,7 @@ function generateImage(senderId, prompt) {
     }).then(response => {
         const imageUrl = response.data.response.match(/https?:\/\/\S+/)[0];
         
-        // إرسال الصورة مباشرة
+        // إرسال الصورة مباشرة عبر botly
         bot.sendImage(senderId, imageUrl);
     }).catch(error => {
         console.error('Image Generation Error:', error);
