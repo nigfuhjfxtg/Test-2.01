@@ -10,11 +10,24 @@ module.exports = {
   author: 'coffee',
 
   async execute(senderId, args, pageAccessToken) {
-    const prompt = args.join(' ');
+    // إذا كان المستخدم أرسل ملصق (نفترض أنه يُرسل الكلمة "sticker" للملصقات)
+    if (args.length === 1 && args[0].toLowerCase() === 'sticker') {
+      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
+    }
+    
+    const prompt = args.join(' ').trim();
     if (!prompt) {
       return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
     }
+    
+    // التحقق مما إذا كانت الرسالة تحتوي على رابط لصورة (png, jpg, jpeg, gif)
+    const imagePattern = /(?:https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
+    if (imagePattern.test(prompt)) {
+      // لن نقوم بتخزين الرسالة إذا كانت صورة، ويمكنك تعديل الرد كما تريد
+      return sendMessage(senderId, { text: "Image messages are not stored." }, pageAccessToken);
+    }
 
+    // التأكد من وجود سجل محادثة للمستخدم
     if (!conversations.has(senderId)) {
       conversations.set(senderId, []);
     }
@@ -31,11 +44,9 @@ module.exports = {
 
       const botResponse = data.response || 'No response received.';
       userMessages.push({ role: 'bot', content: botResponse });
-
       conversations.set(senderId, userMessages);
 
       sendMessage(senderId, { text: botResponse }, pageAccessToken);
-
     } catch (error) {
       console.error('Error fetching GPT-4o response:', error.message);
       sendMessage(senderId, { text: 'There was an error generating the content. Please try again later.' }, pageAccessToken);
