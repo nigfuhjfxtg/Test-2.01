@@ -1,55 +1,65 @@
-const axios = require('axios');
+const axios = require("axios");
 const { sendMessage } = require('../handles/sendMessage');
+const NodeCache = require("node-cache"); // إضافة حزمة لإدارة التخزين المؤقت
 
-const conversations = new Map();
+// تهيئة التخزين المؤقت بــ TTL (30 دقيقة) وفحص دوري كل 5 دقائق
+const conversationCache = new NodeCache({ stdTTL: 1800, checkperiod: 300 });
 
 module.exports = {
   name: 'gpt4',
-  description: 'Interact with GPT-4o',
-  usage: 'gpt4 [your message]',
+  description: 'التفاعل مع GPT-4o',
+  usage: 'gpt4 [رسالتك]',
   author: 'coffee',
 
   async execute(senderId, args, pageAccessToken) {
-    // إذا كان المستخدم أرسل ملصق (نفترض أنه يُرسل الكلمة "sticker" للملصقات)
-    if (args.length === 1 && args[0].toLowerCase() === 'sticker') {
-      return sendMessage(senderId, { text: '👍' }, pageAccessToken);
-    }
-    
-    const prompt = args.join(' ').trim();
+    const prompt = args.join(' ');
     if (!prompt) {
-      return sendMessage(senderId, { text: "Usage: gpt4 <question>" }, pageAccessToken);
+      return sendMessage(senderId, { text: "استخدام: gpt4 <سؤالك>" }, pageAccessToken);
     }
+
+    // استرجاع المحادثة من التخزين المؤقت أو إنشاء جديدة
+    let userMessages = conversationCache.get(senderId) || [];
     
-    // التحقق مما إذا كانت الرسالة تحتوي على رابط لصورة (png, jpg, jpeg, gif)
-    const imagePattern = /(?:https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
-    if (imagePattern.test(prompt)) {
-      // لن نقوم بتخزين الرسالة إذا كانت صورة، ويمكنك تعديل الرد كما تريد
-      return sendMessage(senderId, { text: "Image messages are not stored." }, pageAccessToken);
+    // تحديد سعة المحادثة (آخر 10 رسائل)
+    if (userMessages.length >= 10) {
+      userMessages = userMessages.slice(-9); // الاحتفاظ بالحد الأقصى
     }
 
-    // التأكد من وجود سجل محادثة للمستخدم
-    if (!conversations.has(senderId)) {
-      conversations.set(senderId, []);
-    }
-
-    const userMessages = conversations.get(senderId);
     userMessages.push({ role: 'user', content: prompt });
 
     try {
-      const { data } = await axios.post('https://kaiz-apis.gleeze.com/api/gpt-4o', {
-        messages: userMessages,
-        uid: senderId,
-        webSearch: 'off'
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000); // مهلة 30 ثانية
 
-      const botResponse = data.response || 'No response received.';
+      const { data } = await axios.post(
+        'https://kaiz-apis.gleeze.com/api/gpt-4o',
+        {
+          messages: userMessages,
+          uid: senderId,
+          webSearch: 'off'
+        },
+        { signal: controller.signal } // إرفاق إشارة الإلغاء
+      );
+
+      clearTimeout(timeout);
+
+      const botResponse = data.response || 'لم أتلقَ ردًا.';
       userMessages.push({ role: 'bot', content: botResponse });
-      conversations.set(senderId, userMessages);
+
+      // تحديث التخزين المؤقت مع TTL تلقائي
+      conversationCache.set(senderId, userMessages);
 
       sendMessage(senderId, { text: botResponse }, pageAccessToken);
+
     } catch (error) {
-      console.error('Error fetching GPT-4o response:', error.message);
-      sendMessage(senderId, { text: 'There was an error generating the content. Please try again later.' }, pageAccessToken);
+      console.error('خطأ في الاتصال بالخادم:', error.message);
+      let errorMessage = 'حدث خطأ. يرجى المحاولة لاحقًا.';
+      
+      if (error.code === 'ECONNABORTED' || error.name === 'AbortError') {
+        errorMessage = "انتهت مهلة الطلب. يرجى إعادة المحاولة بطلب أقصر.";
+      }
+
+      sendMessage(senderId, { text: errorMessage }, pageAccessToken);
     }
   }
 };
